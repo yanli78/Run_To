@@ -4,25 +4,32 @@ project(Run_To VERSION 0.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Quick)
+find_package(Qt6 REQUIRED COMPONENTS Quick Mqtt)
 
 qt_standard_project_setup(REQUIRES 6.8)
 
 qt_add_executable(appRun_To
-    main.cpp
+    src/main.cpp
 )
 
 qt_add_qml_module(appRun_To
     URI Run_To
     QML_FILES
-        Main.qml
+        qml/Main.qml
+    # 修复 1：合并 SOURCES 关键字，不要重复写
+    SOURCES
+        src/controllers/MqttHandler.h
+        src/controllers/MqttHandler.cpp
+)
+
+# 修复 2：添加头文件搜索路径，确保构建目录中的自动生成文件能找到头文件
+target_include_directories(appRun_To
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/controllers
 )
 
 # Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.
-# If you are developing for iOS or macOS you should consider setting an
-# explicit, fixed bundle identifier manually though.
 set_target_properties(appRun_To PROPERTIES
-#    MACOSX_BUNDLE_GUI_IDENTIFIER com.example.appRun_To
     MACOSX_BUNDLE_BUNDLE_VERSION ${PROJECT_VERSION}
     MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}
     MACOSX_BUNDLE TRUE
@@ -30,7 +37,9 @@ set_target_properties(appRun_To PROPERTIES
 )
 
 target_link_libraries(appRun_To
-    PRIVATE Qt6::Quick
+    PRIVATE
+        Qt6::Quick
+        Qt6::Mqtt
 )
 
 include(GNUInstallDirs)
