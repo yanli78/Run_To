@@ -7,6 +7,8 @@
 #include "SoftwareScanner.h"
 #include "AppIconProvider.h"
 #include "MqttHandler.h"
+#include "ShareManager.h"
+#include "windows.h"
 
 // 解决 Windows 中文环境下调试输出乱码：
 // VS Code cpptools 调试器通过 GDB MI 协议捕获程序输出，MI 流按 UTF-8 解码，
@@ -39,6 +41,9 @@ static void messageHandler(QtMsgType type, const QMessageLogContext &context, co
 
 int main(int argc, char *argv[])
 {
+    SetConsoleOutputCP(CP_UTF8);
+    SetConsoleCP(CP_UTF8);
+
     // 必须在任何 qDebug/console.log 输出之前安装
     qInstallMessageHandler(messageHandler);
 
@@ -54,6 +59,10 @@ int main(int argc, char *argv[])
 
     AppIconProvider scannerico;
     engine.rootContext()->setContextProperty("appIconProvider", &scannerico);
+
+    ShareManager shareManager;
+    engine.rootContext()->setContextProperty("shareManager", &shareManager);
+
 
     // 全局唯一的 MQTT 客户端，QML 中通过 mqttHandler 访问
     MqttHandler mqttHandler;

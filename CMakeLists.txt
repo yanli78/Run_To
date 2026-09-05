@@ -14,6 +14,8 @@ qt_add_executable(appRun_To
     src/controllers/MqttHandler.cpp
     src/controllers/AppIconProvider.cpp
     src/controllers/SoftwareScanner.cpp
+    src/controllers/ShareManager.cpp
+    src/controllers/AppLauncher.cpp
 )
 
 qt_add_qml_module(appRun_To
@@ -31,6 +33,8 @@ qt_add_qml_module(appRun_To
         src/controllers/MqttHandler.h
         src/controllers/SoftwareScanner.h
         src/controllers/AppIconProvider.h
+        src/controllers/ShareManager.h
+        src/controllers/AppLauncher.h
 
 
 )

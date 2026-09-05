@@ -21,7 +21,22 @@ ApplicationWindow {
 
             ToolButton {
                 text: "分享"
-                onClicked: console.log("触发：分享操作")
+                onClicked: {
+                    console.log("触发：分享操作")
+                    // 调用 C++ 导出方法，默认导出到程序运行目录下的 share_bundle.zip
+                    shareManager.exportSharePackage()
+                }
+
+                Connections {
+                    target: shareManager
+                    function onExportFinished(success, message) {
+                        if (success) {
+                            console.log("成功:", message)
+                        } else {
+                            console.warn("失败:", message)
+                        }
+                    }
+                }
             }
 
             Item { Layout.fillWidth: true }
