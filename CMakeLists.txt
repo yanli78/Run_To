@@ -16,6 +16,8 @@ qt_add_executable(appRun_To
     src/controllers/SoftwareScanner.cpp
     src/controllers/ShareManager.cpp
     src/controllers/AppLauncher.cpp
+    src/controllers/ConfigLauncher.h
+    src/controllers/ConfigLauncher.cpp
 )
 
 qt_add_qml_module(appRun_To

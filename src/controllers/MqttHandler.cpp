@@ -4,6 +4,7 @@
 #include <QJsonObject>
 #include <QJsonValue>
 #include <QJsonParseError>
+#include "ConfigLauncher.h"
 
 MqttHandler::MqttHandler(QObject *parent) : QObject(parent) {
     m_client = new QMqttClient(this);
@@ -149,6 +150,14 @@ void MqttHandler::processDeviceData(const QString &topicName, const QByteArray &
     }
     qDebug() << "--------------------------------------";
 
-    // 通知 QML 界面：HA 发来的 K/R 指令（如 "K1"、"R2"）会走到这里
-    emit messageReceived(topicName, valueStr);
+    bool ok = ConfigLauncher::launchByCharacter(valueStr);
+
+    if (ok)
+    {
+        qDebug() << "启动流程执行完毕";
+    }
+    else
+    {
+        qWarning() << "未能拉起对应程序，请检查日志输出";
+    }
 }
