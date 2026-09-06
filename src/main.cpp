@@ -48,6 +48,8 @@ int main(int argc, char *argv[])
     qInstallMessageHandler(messageHandler);
 
     QGuiApplication app(argc, argv);
+    app.setOrganizationName("MyHomeAutomation");   // 组织名称（自定）
+    app.setApplicationName("DesktopMqttLauncher"); // 应用名称（自定）
     QQmlApplicationEngine engine;
 
     ModuleModel myModel;

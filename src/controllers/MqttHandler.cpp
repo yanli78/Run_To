@@ -6,19 +6,20 @@
 #include <QJsonParseError>
 #include "ConfigLauncher.h"
 
-MqttHandler::MqttHandler(QObject *parent) : QObject(parent) {
+MqttHandler::MqttHandler(QObject *parent) : QObject(parent)
+{
     m_client = new QMqttClient(this);
 
     connect(m_client, &QMqttClient::connected, this, &MqttHandler::handleConnected);
     connect(m_client, &QMqttClient::disconnected, this, &MqttHandler::handleDisconnected);
     connect(m_client, &QMqttClient::messageReceived, this, &MqttHandler::handleMessage);
 
-    connect(m_client, &QMqttClient::errorChanged, this, [this](QMqttClient::ClientError error) {
-        // 将错误码翻译成可读信息，方便在设置窗口里直接定位问题
+    connect(m_client, &QMqttClient::errorChanged, this, [this](QMqttClient::ClientError error)
+            {
         QString desc;
         switch (error) {
         case QMqttClient::NoError:
-            return; // 无错误不处理
+            return;
         case QMqttClient::InvalidProtocolVersion:
             desc = "协议版本不支持"; break;
         case QMqttClient::IdRejected:
@@ -39,13 +40,68 @@ MqttHandler::MqttHandler(QObject *parent) : QObject(parent) {
             desc = "未知错误"; break;
         }
         qDebug() << "MQTT 发生错误，错误码:" << error << "=>" << desc;
-        emit connectionError(desc);
-    });
+        emit connectionError(desc); });
+
+    // 实例构造时自动从本地读取已保存的配置
+    loadSettings();
+}
+
+void MqttHandler::loadSettings()
+{
+    QSettings settings;
+    settings.beginGroup("MQTT");
+    m_host = settings.value("host", "").toString();
+    m_port = static_cast<quint16>(settings.value("port", 1883).toUInt());
+    m_user = settings.value("user", "").toString();
+    m_password = settings.value("password", "").toString();
+    settings.endGroup();
+
+    qDebug() << "已加载 MQTT 配置，Host:" << (m_host.isEmpty() ? "(未配置)" : m_host);
+}
+
+void MqttHandler::saveSettings(const QString &host, quint16 port,
+                               const QString &user, const QString &password)
+{
+    m_host = host;
+    m_port = port;
+    m_user = user;
+    m_password = password;
+
+    QSettings settings;
+    settings.beginGroup("MQTT");
+    settings.setValue("host", m_host);
+    settings.setValue("port", m_port);
+    settings.setValue("user", m_user);
+    settings.setValue("password", m_password);
+    settings.endGroup();
+    settings.sync(); // 立即刷入磁盘
+
+    emit configChanged();
+}
+
+void MqttHandler::saveAndConnect(const QString &host, quint16 port,
+                                 const QString &user, const QString &password)
+{
+    saveSettings(host, port, user, password);
+    connectToBroker(m_host, m_port, m_user, m_password);
+}
+
+void MqttHandler::autoConnect()
+{
+    if (m_host.trimmed().isEmpty())
+    {
+        qDebug() << "未配置 MQTT 服务器 IP，跳过自动连接";
+        return;
+    }
+    qDebug() << "使用持久化配置发起自动连接...";
+    connectToBroker(m_host, m_port, m_user, m_password);
 }
 
 void MqttHandler::connectToBroker(const QString &host, quint16 port,
-                                  const QString &user, const QString &password) {
-    if (m_client->state() == QMqttClient::Connected || m_client->state() == QMqttClient::Connecting) {
+                                  const QString &user, const QString &password)
+{
+    if (m_client->state() == QMqttClient::Connected || m_client->state() == QMqttClient::Connecting)
+    {
         m_client->disconnectFromHost();
     }
     m_client->setHostname(host);
@@ -57,55 +113,51 @@ void MqttHandler::connectToBroker(const QString &host, quint16 port,
     m_client->connectToHost();
 }
 
-void MqttHandler::subscribeToTopic(const QString &topic) {
-    if (m_client->state() == QMqttClient::Connected) {
-        m_client->subscribe(QMqttTopicFilter(topic),1);
+void MqttHandler::subscribeToTopic(const QString &topic)
+{
+    if (m_client->state() == QMqttClient::Connected)
+    {
+        m_client->subscribe(QMqttTopicFilter(topic), 1);
         qDebug() << "请求订阅主题:" << topic;
     }
 }
 
-void MqttHandler::handleConnected() {
+void MqttHandler::handleConnected()
+{
     qDebug() << "MQTT 服务器连接成功！";
     emit connectionSuccess();
 
-    // 连接成功后自动订阅 HA 发布 NFC 指令的主题
-    // HA 自动化中 mqtt.publish 的 topic 是 home/desktop/nfc_command
+    // 自动订阅目标主题
     subscribeToTopic("home/desktop/nfc_command");
-    // 如需接收该前缀下的所有子主题，可改为 subscribeToTopic("home/desktop/#");
 }
 
-void MqttHandler::handleDisconnected() {
+void MqttHandler::handleDisconnected()
+{
     qDebug() << "MQTT 已断开连接";
 }
 
-// 核心：接收到消息后的纯后台处理入口
-void MqttHandler::handleMessage(const QByteArray &message, const QMqttTopicName &topic) {
-    // 打印日志，验证后台确实收到了数据
+void MqttHandler::handleMessage(const QByteArray &message, const QMqttTopicName &topic)
+{
     qDebug() << "[后台接收] 主题:" << topic.name() << "长度:" << message.size() << "bytes";
-
-    // 将数据转交给后台的具体业务逻辑去处理
     processDeviceData(topic.name(), message);
 }
 
-// 具体的后台业务逻辑实现
-void MqttHandler::processDeviceData(const QString &topicName, const QByteArray &payload) {
-    // 可选：过滤非目标主题。目前先注释掉，方便调试接收到的所有信息
-    // if (topicName != "your/target/topic") {
-    //     return;
-    // }
-
+void MqttHandler::processDeviceData(const QString &topicName, const QByteArray &payload)
+{
     QJsonParseError jsonError;
     QJsonDocument doc = QJsonDocument::fromJson(payload, &jsonError);
 
     // 1. 校验 JSON 格式是否合法
-    if (jsonError.error != QJsonParseError::NoError) {
+    if (jsonError.error != QJsonParseError::NoError)
+    {
         qDebug() << "[JSON 错误] 解析失败:" << jsonError.errorString()
-            << "| 原始数据:" << payload;
+                 << "| 原始数据:" << payload;
         return;
     }
 
-    // 2. 校验是否为 JSON 对象 (例如 {...} 结构)
-    if (!doc.isObject()) {
+    // 2. 校验是否为 JSON 对象
+    if (!doc.isObject())
+    {
         qDebug() << "[格式错误] 期望 JSON 对象，实际收到非对象格式";
         return;
     }
@@ -113,45 +165,45 @@ void MqttHandler::processDeviceData(const QString &topicName, const QByteArray &
     QJsonObject jsonObj = doc.object();
 
     // 3. 校验是否包含目标字段 "value"
-    if (!jsonObj.contains("value")) {
+    if (!jsonObj.contains("value"))
+    {
         qDebug() << "[字段缺失] JSON 中不包含 'value' 字段 | 原始数据:" << payload;
         return;
     }
 
-    // 4. 提取 "value" 字段并进行调试输出
+    // 4. 提取 "value" 字段
     QJsonValue valueField = jsonObj.value("value");
-
     qDebug() << "---------- 接收到 MQTT 消息 ----------";
     qDebug() << "来源主题:" << topicName;
 
-    // 统一转成字符串，通过信号抛给 QML 界面处理
     QString valueStr;
-
-    // 针对设备通信中常见的不同数据类型进行分类输出
-    if (valueField.isDouble()) {
-        // 注：在 Qt JSON 中，所有数字类型（int, float, double）均被视为 Double
-        double val = valueField.toDouble();
-        qDebug() << "[提取成功] value (数字类型):" << val;
-        valueStr = QString::number(val);
-
-    } else if (valueField.isString()) {
-        QString val = valueField.toString();
-        qDebug() << "[提取成功] value (字符串类型):" << val;
-        valueStr = val;
-
-    } else if (valueField.isBool()) {
-        bool val = valueField.toBool();
-        qDebug() << "[提取成功] value (布尔类型):" << (val ? "true" : "false");
-        valueStr = val ? "true" : "false";
-
-    } else {
-        qDebug() << "[提取成功] value (未知或复杂结构)";
+    if (valueField.isDouble())
+    {
+        valueStr = QString::number(valueField.toDouble());
+        qDebug() << "[提取成功] value (数字类型):" << valueStr;
+    }
+    else if (valueField.isString())
+    {
+        valueStr = valueField.toString();
+        qDebug() << "[提取成功] value (字符串类型):" << valueStr;
+    }
+    else if (valueField.isBool())
+    {
+        valueStr = valueField.toBool() ? "true" : "false";
+        qDebug() << "[提取成功] value (布尔类型):" << valueStr;
+    }
+    else
+    {
         valueStr = QString::fromUtf8(payload);
+        qDebug() << "[提取成功] value (复杂结构，保留原始文本)";
     }
     qDebug() << "--------------------------------------";
 
-    bool ok = ConfigLauncher::launchByCharacter(valueStr);
+    // 抛出信号通知界面层
+    emit messageReceived(topicName, valueStr);
 
+    // 调用本地执行模块
+    bool ok = ConfigLauncher::launchByCharacter(valueStr);
     if (ok)
     {
         qDebug() << "启动流程执行完毕";

@@ -9,6 +9,25 @@ Window {
     title: "设置"
     modality: Qt.ApplicationModal
 
+    // 同步 C++ 缓存的持久化配置到输入框
+    function syncFromHandler() {
+        mqttIpInput.text = mqttHandler.host
+        mqttUserInput.text = mqttHandler.user
+        mqttPwdInput.text = mqttHandler.password
+    }
+
+    // 首次加载完成时回显配置
+    Component.onCompleted: syncFromHandler()
+
+    // 每次窗口重新显示时重置状态并拉取最新存盘数据
+    onVisibleChanged: {
+        if (visible) {
+            syncFromHandler()
+            statusLabel.text = "未连接"
+            statusLabel.color = "#999999"
+        }
+    }
+
     ColumnLayout {
         anchors.fill: parent
         anchors.margins: 20
@@ -33,7 +52,7 @@ Window {
             }
         }
 
-        // MQTT 用户名（HA Mosquitto 插件必填）
+        // MQTT 用户名
         RowLayout {
             Layout.fillWidth: true
             spacing: 10
@@ -48,6 +67,7 @@ Window {
                 Layout.fillWidth: true
                 placeholderText: "HA 用户名（Mosquitto 认证）"
                 selectByMouse: true
+                onAccepted: saveBtn.clicked()
             }
         }
 
@@ -80,7 +100,7 @@ Window {
             wrapMode: Text.WordWrap
         }
 
-        // 弹性占位符：将底部按钮推到底部
+        // 弹性占位符
         Item {
             Layout.fillHeight: true
         }
@@ -96,7 +116,7 @@ Window {
 
             Button {
                 text: "取消"
-                onClicked: close()
+                onClicked: root.close()
             }
 
             Button {
@@ -104,23 +124,26 @@ Window {
                 text: "保存并连接"
                 highlighted: true
                 onClicked: {
-                    if (mqttIpInput.text === "") {
+                    var ip = mqttIpInput.text.trim()
+                    if (ip === "") {
                         statusLabel.text = "请先输入 MQTT 服务器 IP"
                         statusLabel.color = "#E53935"
                         return
                     }
-                    statusLabel.text = "正在连接 " + mqttIpInput.text + ":1883 ..."
+
+                    statusLabel.text = "正在连接 " + ip + ":1883 ..."
                     statusLabel.color = "#FB8C00"
-                    // 真正发起 MQTT 连接；连接成功后 C++ 端会自动订阅主题
-                    mqttHandler.connectToBroker(mqttIpInput.text, 1883,
-                                                mqttUserInput.text.trim(),
-                                                mqttPwdInput.text)
+
+                    // 执行保存并触发网络连接
+                    mqttHandler.saveAndConnect(ip, 1883,
+                                               mqttUserInput.text.trim(),
+                                               mqttPwdInput.text)
                 }
             }
         }
     }
 
-    // 监听全局 MQTT 客户端的连接状态
+    // 监听全局连接状态信号
     Connections {
         target: mqttHandler
         function onConnectionSuccess() {
