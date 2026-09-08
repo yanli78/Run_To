@@ -5,14 +5,10 @@ import QtQuick.Layouts
 Page {
     id: detailPage
 
-    // 接收参数
     property string appName: ""
     property string appPath: ""
-
-    // 初始随机生成颜色
     property string randomColor: generateRandomColor()
 
-    // 生成随机 HEX 颜色的辅助函数
     function generateRandomColor() {
         var letters = '0123456789ABCDEF'
         var color = '#'
@@ -22,97 +18,327 @@ Page {
         return color
     }
 
+    // 颜色合法性校验辅助函数，防止非法字符串导致 QML 报警
+    function getValidColor(colorStr, fallback) {
+        var c = Qt.color(colorStr)
+        return (c.a > 0 || colorStr.toLowerCase() === "#000000" || colorStr.toLowerCase() === "black") ? colorStr : fallback
+    }
+
+    background: Rectangle {
+        color: "#F5F6F8"
+    }
+
     header: ToolBar {
+        background: Rectangle {
+            color: "#FFFFFF"
+            Rectangle {
+                anchors.bottom: parent.bottom
+                width: parent.width
+                height: 1
+                color: "#E2E4E8"
+            }
+        }
+
         RowLayout {
             anchors.fill: parent
+            anchors.leftMargin: 12
+            anchors.rightMargin: 12
 
             ToolButton {
-                text: "< 返回"
+                text: "‹ 返回"
+                font.pixelSize: 14
+                font.bold: true
                 onClicked: detailPage.StackView.view.pop()
             }
 
             Label {
-                text: "配置详情"
+                text: "应用配置"
+                font.pixelSize: 15
+                font.bold: true
+                color: "#1E2022"
                 Layout.fillWidth: true
                 horizontalAlignment: Qt.AlignHCenter
             }
 
-            Item { width: 40 }
+            Item { width: 48 } // 视觉平衡占位
         }
     }
 
-    ColumnLayout {
-        anchors.centerIn: parent
-        width: parent.width * 0.8
-        spacing: 15
+    ScrollView {
+        anchors.fill: parent
+        contentWidth: availableWidth
+        clip: true
 
-        TextField {
-            id: nameInput
-            Layout.fillWidth: true
-            placeholderText: "软件名称"
-            text: detailPage.appName
-        }
+        ColumnLayout {
+            width: Math.min(parent.width - 32, 440)
+            anchors.horizontalCenter: parent.horizontalCenter
+            spacing: 20
 
-        TextField {
-            id: pathInput
-            Layout.fillWidth: true
-            placeholderText: "软件路径"
-            text: detailPage.appPath
-            readOnly: true
-            color: "#666"
-        }
+            Item { height: 8 } // 顶部间距
 
-        TextField {
-            id: characterInput
-            Layout.fillWidth: true
-            placeholderText: "代表字符 (如 A, B)"
-            maximumLength: 2 // 限制字符长度
-        }
-
-        // 颜色输入与预览行
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: 10
-
-            TextField {
-                id: colorInput
-                Layout.fillWidth: true
-                placeholderText: "十六进制颜色 (如 #FF0000)"
-                text: detailPage.randomColor
-            }
-
-            // 颜色预览方块
+            // 顶部实时徽标预览卡片
             Rectangle {
-                width: 32
-                height: 32
-                radius: 4
-                color: colorInput.text
-                border.color: "#ccc"
-            }
+                Layout.fillWidth: true
+                height: 108
+                radius: 12
+                color: "#FFFFFF"
+                border.color: "#E5E7EB"
+                border.width: 1
 
-            // 重新随机按钮
-            Button {
-                text: "换一个"
-                onClicked: {
-                    colorInput.text = detailPage.generateRandomColor()
+                RowLayout {
+                    anchors.centerIn: parent
+                    spacing: 16
+
+                    Rectangle {
+                        width: 64
+                        height: 64
+                        radius: 14
+                        color: detailPage.getValidColor(colorInput.text, "#4F46E5")
+                        border.color: Qt.rgba(0, 0, 0, 0.08)
+                        border.width: 1
+
+                        Label {
+                            anchors.centerIn: parent
+                            text: characterInput.text.trim() !== "" ? characterInput.text.toUpperCase() : "A"
+                            font.pixelSize: 26
+                            font.bold: true
+                            color: "#FFFFFF"
+                        }
+                    }
+
+                    ColumnLayout {
+                        spacing: 4
+                        Label {
+                            text: nameInput.text.trim() !== "" ? nameInput.text : "应用名称"
+                            font.pixelSize: 16
+                            font.bold: true
+                            color: "#111827"
+                            Layout.maximumWidth: 260
+                            elide: Text.ElideRight
+                        }
+                        Label {
+                            text: "实时图标与配置预览"
+                            font.pixelSize: 12
+                            color: "#6B7280"
+                        }
+                    }
                 }
             }
-        }
 
-        Button {
-            text: "确定并保存"
-            Layout.fillWidth: true
-            onClicked: {
-                console.log("准备保存:", nameInput.text, pathInput.text, colorInput.text, characterInput.text)
+            // 表单卡片区域
+            Rectangle {
+                Layout.fillWidth: true
+                implicitHeight: formLayout.implicitHeight + 32
+                radius: 12
+                color: "#FFFFFF"
+                border.color: "#E5E7EB"
+                border.width: 1
 
-                // 调用 C++ 接口写入 config.json
-                // 注意：此处的 moduleModel 必须是你通过 setContextProperty 注册到 QML 的实例名
-                // 如果你的注册名不同（如 myModel 或 cppBlockModel），请替换对应的名字
-                moduleModel.addModule(nameInput.text, pathInput.text, colorInput.text, characterInput.text)
+                ColumnLayout {
+                    id: formLayout
+                    anchors.fill: parent
+                    anchors.margins: 16
+                    spacing: 14
 
-                // 隐藏当前窗口
-                detailPage.Window.window.hide()
+                    // 软件名称
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 6
+
+                        Label {
+                            text: "软件名称"
+                            font.pixelSize: 12
+                            font.bold: true
+                            color: "#4B5563"
+                        }
+
+                        TextField {
+                            id: nameInput
+                            Layout.fillWidth: true
+                            implicitHeight: 38
+                            text: detailPage.appName
+                            placeholderText: "例如：Google Chrome"
+                            font.pixelSize: 13
+                            selectByMouse: true
+                            background: Rectangle {
+                                radius: 6
+                                border.color: nameInput.activeFocus ? "#3B82F6" : "#D1D5DB"
+                                border.width: nameInput.activeFocus ? 1.5 : 1
+                                color: "#FFFFFF"
+                            }
+                        }
+                    }
+
+                    // 软件路径
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 6
+
+                        Label {
+                            text: "执行路径 (不可编辑)"
+                            font.pixelSize: 12
+                            font.bold: true
+                            color: "#4B5563"
+                        }
+
+                        TextField {
+                            id: pathInput
+                            Layout.fillWidth: true
+                            implicitHeight: 38
+                            text: detailPage.appPath
+                            readOnly: true
+                            font.pixelSize: 12
+                            color: "#6B7280"
+                            selectByMouse: true
+                            background: Rectangle {
+                                radius: 6
+                                border.color: "#E5E7EB"
+                                color: "#F9FAFB"
+                            }
+                        }
+                    }
+
+                    // 代表字符
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 6
+
+                        Label {
+                            text: "代表字符 (1~2 个字符)"
+                            font.pixelSize: 12
+                            font.bold: true
+                            color: "#4B5563"
+                        }
+
+                        TextField {
+                            id: characterInput
+                            Layout.fillWidth: true
+                            implicitHeight: 38
+                            placeholderText: "如：C、CH"
+                            maximumLength: 2
+                            font.pixelSize: 13
+                            selectByMouse: true
+                            background: Rectangle {
+                                radius: 6
+                                border.color: characterInput.activeFocus ? "#3B82F6" : "#D1D5DB"
+                                border.width: characterInput.activeFocus ? 1.5 : 1
+                                color: "#FFFFFF"
+                            }
+                        }
+                    }
+
+                    // 主题颜色
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 6
+
+                        Label {
+                            text: "图标背景色"
+                            font.pixelSize: 12
+                            font.bold: true
+                            color: "#4B5563"
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 8
+
+                            TextField {
+                                id: colorInput
+                                Layout.fillWidth: true
+                                implicitHeight: 38
+                                text: detailPage.randomColor
+                                placeholderText: "#HEX 格式"
+                                font.pixelSize: 13
+                                selectByMouse: true
+                                background: Rectangle {
+                                    radius: 6
+                                    border.color: colorInput.activeFocus ? "#3B82F6" : "#D1D5DB"
+                                    border.width: colorInput.activeFocus ? 1.5 : 1
+                                    color: "#FFFFFF"
+                                }
+                            }
+
+                            // 颜色色块预览
+                            Rectangle {
+                                width: 38
+                                height: 38
+                                radius: 6
+                                color: detailPage.getValidColor(colorInput.text, "#CCCCCC")
+                                border.color: "#D1D5DB"
+                                border.width: 1
+                            }
+
+                            // 随机颜色按钮
+                            Button {
+                                implicitHeight: 38
+                                implicitWidth: 70
+                                text: "随机"
+                                font.pixelSize: 12
+                                onClicked: {
+                                    colorInput.text = detailPage.generateRandomColor()
+                                }
+                                background: Rectangle {
+                                    radius: 6
+                                    border.color: parent.down ? "#9CA3AF" : "#D1D5DB"
+                                    color: parent.down ? "#E5E7EB" : (parent.hovered ? "#F3F4F6" : "#FFFFFF")
+                                }
+                            }
+                        }
+                    }
+                }
             }
+
+            // 保存按钮
+            Button {
+                id: submitBtn
+                Layout.fillWidth: true
+                implicitHeight: 42
+                text: "确定并保存"
+                font.pixelSize: 14
+                font.bold: true
+
+                contentItem: Text {
+                    text: submitBtn.text
+                    font: submitBtn.font
+                    color: "#FFFFFF"
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+
+                background: Rectangle {
+                    radius: 8
+                    color: submitBtn.down ? "#1D4ED8" : (submitBtn.hovered ? "#2563EB" : "#3B82F6")
+                }
+
+                onClicked: {
+                    // 1. 先缓存 Window 和 StackView 引用
+                    // 因为 Immediate 立即出栈会瞬间解绑当前组件，直接访问可能导致对象失效
+                    var targetWin = detailPage.Window.window
+                    var stack = detailPage.StackView.view
+
+                    // 2. 写入数据模型
+                    if (typeof moduleModel !== "undefined" && moduleModel.addModule) {
+                        moduleModel.addModule(nameInput.text, pathInput.text, colorInput.text, characterInput.text)
+                    } else {
+                        console.warn("moduleModel 未注册或未找到 addModule 方法")
+                    }
+
+                    // 3. 瞬间出栈至根页面（上一个页面）
+                    // null 表示直接回退到最底层页面，StackView.Immediate 强制不使用任何过渡动画
+                    if (stack) {
+                        stack.pop(null, StackView.Immediate)
+                    }
+
+                    // 4. 关闭/隐藏当前窗口
+                    if (targetWin) {
+                        targetWin.close() // 或 targetWin.hide()
+                    }
+                }
+
+            }
+
+            Item { height: 16 } // 底部留白
         }
     }
 }

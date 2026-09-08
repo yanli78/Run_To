@@ -7,62 +7,103 @@ Rectangle {
     width: 120
     height: 120
     radius: 12
-    color: "white"
+    color: mouseArea.containsMouse ? "#FFFFFF" : "#FAFAFA"
 
-    // 对外暴露需要的属性
+    // 对外属性
     property string title: ""
-    property string iconColor: "#4A90E2"
-    // 【新增】图标源路径。默认留空
+    property string iconColor: "#3B82F6"
     property string iconSource: ""
+    signal clicked()
 
-    signal clicked() // 自定义点击信号
-
-    // 恢复了你代码中去除的鼠标悬浮边框变色效果（可选）
-    border.color: mouseArea.containsMouse ? "#4A90E2" : "#E0E0E0"
-    border.width: mouseArea.containsMouse ? 2 : 1
-    Behavior on border.color { ColorAnimation { duration: 200 } }
+    // 悬停边框动效
+    border.color: mouseArea.containsMouse ? "#3B82F6" : "#E5E7EB"
+    border.width: mouseArea.containsMouse ? 1.5 : 1
+    Behavior on border.color { ColorAnimation { duration: 150 } }
+    Behavior on color { ColorAnimation { duration: 150 } }
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 15
-        spacing: 10
+        anchors.margins: 12
+        spacing: 8
 
         // 图标区域
         Rectangle {
+            id: iconContainer
             Layout.alignment: Qt.AlignHCenter
-            width: 50
-            height: 50
-            radius: 25
+            width: 48
+            height: 48
+            radius: 24
+            color: (cardImg.status === Image.Ready) ? "transparent" : cardRoot.iconColor
 
-            // 如果传入了自定义图标，背景可以设为透明；否则使用占位颜色
-            color: cardRoot.iconSource === "" ? cardRoot.iconColor : "transparent"
-
-            // 1. 文字占位符：只有在未提供 iconSource 时显示
+            // 占位字符
             Label {
                 anchors.centerIn: parent
-                text: cardRoot.title.charAt(0)
-                color: "white"
-                font.pixelSize: 24
+                text: cardRoot.title ? cardRoot.title.charAt(0).toUpperCase() : "A"
+                color: "#FFFFFF"
+                font.pixelSize: 22
                 font.bold: true
-                visible: cardRoot.iconSource === ""
+                visible: cardImg.status !== Image.Ready
             }
 
-            // 2. 自定义图片：只有在提供了 iconSource 时显示
+            // 图标图片
             Image {
+                id: cardImg
                 anchors.centerIn: parent
-                width: 32 // 建议比外层Rectangle稍小一点留出内边距
+                width: 32
                 height: 32
                 source: cardRoot.iconSource
-                fillMode: Image.PreserveAspectFit // 类似 Flutter 的 BoxFit.contain
-                visible: cardRoot.iconSource !== ""
+                fillMode: Image.PreserveAspectFit
+                asynchronous: true
+                sourceSize: Qt.size(64, 64)
+                visible: status === Image.Ready
             }
         }
 
+        // 标题与悬停提示
         Label {
-            Layout.alignment: Qt.AlignHCenter
+            id: titleLabel
+            Layout.fillWidth: true
+            horizontalAlignment: Text.AlignHCenter
             text: cardRoot.title
-            font.pixelSize: 16
-            color: "#333333"
+            font.pixelSize: 13
+            font.bold: mouseArea.containsMouse
+            elide: Text.ElideRight
+
+            // 悬停颜色过渡
+            color: mouseArea.containsMouse ? "#2563EB" : "#1F2937"
+            Behavior on color { ColorAnimation { duration: 150 } }
+
+            // 优化后的独立 ToolTip
+            ToolTip {
+                id: cardToolTip
+                // 仅在卡片悬停且文字被截断（超出宽度）时才弹出
+                visible: mouseArea.containsMouse && titleLabel.truncated
+                text: cardRoot.title
+                delay: 350
+                timeout: 4000
+
+                // 定位在标题正下方居中
+                y: titleLabel.height + 4
+                x: (titleLabel.width - width) / 2
+
+                contentItem: Text {
+                    text: cardToolTip.text
+                    font.pixelSize: 11
+                    color: "#F9FAFB"
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                    wrapMode: Text.WrapAnywhere
+                    maximumLineCount: 3
+                    elide: Text.ElideRight
+                }
+
+                background: Rectangle {
+                    radius: 6
+                    color: "#1F2937"
+                    border.color: "#374151"
+                    border.width: 1
+                }
+            }
         }
     }
 
@@ -70,6 +111,7 @@ Rectangle {
         id: mouseArea
         anchors.fill: parent
         hoverEnabled: true
+        cursorShape: Qt.PointingHandCursor
         onClicked: cardRoot.clicked()
     }
 }

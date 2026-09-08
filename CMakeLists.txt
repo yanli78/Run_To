@@ -4,7 +4,7 @@ project(Run_To VERSION 0.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Quick Mqtt Widgets)
+find_package(Qt6 REQUIRED COMPONENTS Quick Mqtt Widgets QuickControls2)
 
 qt_standard_project_setup(REQUIRES 6.8)
 
@@ -59,7 +59,16 @@ target_link_libraries(appRun_To
         Qt6::Quick
         Qt6::Mqtt
         Qt6::Widgets
+        Qt6::QuickControls2
 )
+
+if(WIN32)
+    target_link_libraries(appRun_To
+        PRIVATE
+            ole32
+            shell32
+    )
+endif()
 
 include(GNUInstallDirs)
 install(TARGETS appRun_To
