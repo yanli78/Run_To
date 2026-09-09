@@ -5,6 +5,8 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Window
+import Qt.labs.platform
+
 import "components"
 import "views"
 
@@ -17,6 +19,62 @@ ApplicationWindow {
     visible: true
     title: "快捷控制台"
     color: "#F5F6F8"
+
+    // 1. 增加一个标识，判断是否是彻底退出
+    property bool isReallyQuit: false
+
+    // 2. 修改 onClosing 逻辑
+    onClosing: function(close) {
+        if (root.isReallyQuit) {
+            // 如果是彻底退出，放行关闭事件
+            close.accepted = true
+        } else {
+            // 否则仅拦截并隐藏窗口到托盘
+            close.accepted = false
+            root.hide()
+        }
+    }
+
+
+    SystemTrayIcon {
+        id: trayIcon
+        visible: true
+        tooltip: "桌面快捷控制台"
+        // 需指定托盘显示的图标文件（支持本地绝对路径或 qrc:/ 资源路径）
+        icon.source: Qt.resolvedUrl("../assets/Run.png")
+
+        // 左键单击或双击托盘图标：恢复并激活主窗口
+        onActivated: function(reason) {
+            if (reason === SystemTrayIcon.Trigger || reason === SystemTrayIcon.DoubleClick) {
+                root.show()
+                root.raise()
+                root.requestActivate()
+            }
+        }
+
+        // 右键托盘弹出原生菜单
+        menu: Menu {
+            MenuItem {
+                text: "打开主界面"
+                onTriggered: {
+                    root.show()
+                    root.raise()
+                    root.requestActivate()
+                }
+            }
+
+            MenuSeparator {}
+
+            MenuItem {
+                text: "彻底退出"
+                onTriggered: {
+                    root.isReallyQuit = true // 标记为真退出
+                    trayIcon.visible = false // 立即隐藏托盘图标
+                    Qt.quit() // 触发正常退出
+                }
+            }
+        }
+    }
 
     // 状态标识与选中项索引记录
     property bool mqttConnected: false

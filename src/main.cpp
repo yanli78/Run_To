@@ -44,6 +44,8 @@ int main(int argc, char *argv[])
     qInstallMessageHandler(messageHandler);
 
     QGuiApplication app(argc, argv);
+    
+    app.setQuitOnLastWindowClosed(false);
 
     // 启用纯 GPU 绘制且支持高度定制的基础控件样式
     QQuickStyle::setStyle("Basic");

@@ -38,6 +38,9 @@ qt_add_qml_module(appRun_To
         src/controllers/ShareManager.h
         src/controllers/AppLauncher.h
 
+    RESOURCES
+        assets/Run.png
+
 
 )
 
