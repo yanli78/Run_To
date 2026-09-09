@@ -26,6 +26,8 @@ public:
     QString user() const { return m_user; }
     QString password() const { return m_password; }
 
+    Q_INVOKABLE void tryAutoConnect();
+
     // 供 QML 设置窗口调用：保存到本地并立即发起连接
     Q_INVOKABLE void saveAndConnect(const QString &host, quint16 port,
                                     const QString &user, const QString &password);

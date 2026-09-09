@@ -213,3 +213,20 @@ void MqttHandler::processDeviceData(const QString &topicName, const QByteArray &
         qWarning() << "未能拉起对应程序，请检查日志输出";
     }
 }
+
+void MqttHandler::tryAutoConnect()
+{
+    // 获取当前缓存的 Host（根据实际成员变量名调整，如 m_host）
+    QString host = m_host.trimmed();
+
+    if (!host.isEmpty())
+    {
+        qDebug() << "[启动自连] 检测到配置缓存，开始自动连接 Broker:" << host;
+        // 调用现有连接接口
+        saveAndConnect(host, 1883, m_user, m_password);
+    }
+    else
+    {
+        qDebug() << "[启动自连] 本地未配置 MQTT 地址，跳过自动连接";
+    }
+}

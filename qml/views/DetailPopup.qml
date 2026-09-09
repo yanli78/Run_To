@@ -1,4 +1,3 @@
-// DetailPopup.qml
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -12,29 +11,37 @@ Popup {
     anchors.centerIn: Overlay.overlay
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
-    // 对外数据接口
+    // 对外数据接口（对应 4 个角色）
     property string titleText: ""
     property string contentText: ""
     property string iconColor: "#3B82F6"
     property string characterText: ""
 
     // 功能控制接口
-    property bool editable: false // 是否启用编辑/操作扩展模式（通知类弹窗设为 false，应用卡片设为 true）
-    property bool isEditing: false // 当前是否正处于编辑状态
+    property bool editable: false // 是否启用编辑/操作模式
+    property bool isEditing: false // 当前是否处于编辑状态
 
-    // 动作信号：供外部（如 Main.qml）监听处理
-    signal saved(string newTitle, string newContent)
+    // 【修改】信号携带 4 个参数：名称、路径、颜色、代表字符
+    signal saved(string newTitle, string newContent, string newColor, string newCharacter)
     signal deleted()
     signal launched()
 
-    // 弹窗打开或关闭时重置编辑状态
+    // 颜色合法性校验辅助函数，防止非法字符串导致 QML 报错
+    function getValidColor(colorStr, fallback) {
+        if (!colorStr) return fallback
+        var c = Qt.color(colorStr)
+        return (c.a > 0 || colorStr.toLowerCase() === "#000000" || colorStr.toLowerCase() === "black") ? colorStr : fallback
+    }
+
+    // 弹窗展开时同步初始化表单
     onAboutToShow: {
         isEditing = false
         editNameField.text = titleText
         editPathField.text = contentText
+        editCharField.text = characterText
+        editColorField.text = iconColor
     }
 
-    // 模态背景遮罩（深色半透明平滑暗化）
     Overlay.modal: Rectangle {
         color: Qt.rgba(0, 0, 0, 0.45)
     }
@@ -52,7 +59,7 @@ Popup {
         anchors.margins: 20
         spacing: 16
 
-        // --- 1. 顶部标题栏与关闭按钮 ---
+        // --- 1. 顶部标题栏 ---
         RowLayout {
             Layout.fillWidth: true
             spacing: 8
@@ -66,7 +73,6 @@ Popup {
                 elide: Text.ElideRight
             }
 
-            // 右上角平滑关闭小图标
             Rectangle {
                 width: 26
                 height: 26
@@ -105,34 +111,139 @@ Popup {
             spacing: 12
             visible: popup.editable && popup.isEditing
 
+            // 软件名称与代表字符（并排）
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 12
+
+                // 软件名称输入框
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 4
+
+                    Label {
+                        text: "程序名称"
+                        font.pixelSize: 12
+                        font.bold: true
+                        color: "#4B5563"
+                    }
+
+                    TextField {
+                        id: editNameField
+                        Layout.fillWidth: true
+                        implicitHeight: 38
+                        text: popup.titleText
+                        placeholderText: "输入程序名称"
+                        font.pixelSize: 13
+                        selectByMouse: true
+                        background: Rectangle {
+                            radius: 6
+                            border.color: editNameField.activeFocus ? "#3B82F6" : "#D1D5DB"
+                            border.width: editNameField.activeFocus ? 1.5 : 1
+                            color: "#FFFFFF"
+                        }
+                    }
+                }
+
+                // 代表字符输入框与徽标实时预览
+                ColumnLayout {
+                    Layout.preferredWidth: 120
+                    spacing: 4
+
+                    Label {
+                        text: "代表字符"
+                        font.pixelSize: 12
+                        font.bold: true
+                        color: "#4B5563"
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 8
+
+                        TextField {
+                            id: editCharField
+                            Layout.fillWidth: true
+                            implicitHeight: 38
+                            text: popup.characterText
+                            placeholderText: "A"
+                            maximumLength: 2
+                            font.pixelSize: 13
+                            selectByMouse: true
+                            background: Rectangle {
+                                radius: 6
+                                border.color: editCharField.activeFocus ? "#3B82F6" : "#D1D5DB"
+                                border.width: editCharField.activeFocus ? 1.5 : 1
+                                color: "#FFFFFF"
+                            }
+                        }
+
+                        // 字符与颜色联动实时预览色块
+                        Rectangle {
+                            width: 38
+                            height: 38
+                            radius: 6
+                            color: popup.getValidColor(editColorField.text, popup.iconColor)
+                            border.color: Qt.rgba(0, 0, 0, 0.08)
+                            border.width: 1
+
+                            Label {
+                                anchors.centerIn: parent
+                                text: editCharField.text.trim() !== "" ? editCharField.text.toUpperCase() : "A"
+                                font.pixelSize: 14
+                                font.bold: true
+                                color: "#FFFFFF"
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 【新增】图标背景色输入行
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: 4
 
                 Label {
-                    text: "程序名称"
+                    text: "图标背景色 (#HEX)"
                     font.pixelSize: 12
                     font.bold: true
                     color: "#4B5563"
                 }
 
-                TextField {
-                    id: editNameField
+                RowLayout {
                     Layout.fillWidth: true
-                    implicitHeight: 38
-                    text: popup.titleText
-                    placeholderText: "输入程序名称"
-                    font.pixelSize: 13
-                    selectByMouse: true
-                    background: Rectangle {
+                    spacing: 8
+
+                    TextField {
+                        id: editColorField
+                        Layout.fillWidth: true
+                        implicitHeight: 38
+                        text: popup.iconColor
+                        placeholderText: "例如：#3B82F6"
+                        font.pixelSize: 13
+                        selectByMouse: true
+                        background: Rectangle {
+                            radius: 6
+                            border.color: editColorField.activeFocus ? "#3B82F6" : "#D1D5DB"
+                            border.width: editColorField.activeFocus ? 1.5 : 1
+                            color: "#FFFFFF"
+                        }
+                    }
+
+                    // 纯色块预览
+                    Rectangle {
+                        width: 38
+                        height: 38
                         radius: 6
-                        border.color: editNameField.activeFocus ? "#3B82F6" : "#D1D5DB"
-                        border.width: editNameField.activeFocus ? 1.5 : 1
-                        color: "#FFFFFF"
+                        color: popup.getValidColor(editColorField.text, "#CCCCCC")
+                        border.color: "#D1D5DB"
+                        border.width: 1
                     }
                 }
             }
 
+            // 执行路径输入框
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: 4
@@ -162,13 +273,12 @@ Popup {
             }
         }
 
-        // 场景 B：普通查看模式（支持普通通知文本或应用卡片信息）
+        // 场景 B：普通查看模式
         ColumnLayout {
             Layout.fillWidth: true
             spacing: 12
             visible: !popup.isEditing
 
-            // 若带有路径/应用信息，渲染预览信息框
             Rectangle {
                 Layout.fillWidth: true
                 implicitHeight: infoLayout.implicitHeight + 20
@@ -183,7 +293,7 @@ Popup {
                     anchors.margins: 10
                     spacing: 12
 
-                    // 软件代表字符徽标（当有字符时显示）
+                    // 徽标块
                     Rectangle {
                         visible: popup.characterText !== ""
                         width: 38
@@ -201,7 +311,7 @@ Popup {
                         }
                     }
 
-                    // 文本信息详情
+                    // 信息展示
                     ColumnLayout {
                         Layout.fillWidth: true
                         spacing: 4
@@ -212,7 +322,6 @@ Popup {
                             color: "#9CA3AF"
                         }
 
-                        // 支持文本长内容选择与复制
                         TextEdit {
                             Layout.fillWidth: true
                             text: popup.contentText
@@ -227,12 +336,12 @@ Popup {
             }
         }
 
-        // --- 3. 底部操作按钮区域 ---
+        // --- 3. 底部操作栏 ---
         RowLayout {
             Layout.fillWidth: true
             spacing: 10
 
-            // 模式 1：处于编辑状态时的操作按钮 [取消] [保存]
+            // 编辑状态按钮：[取消] [保存修改]
             RowLayout {
                 Layout.fillWidth: true
                 spacing: 10
@@ -274,17 +383,21 @@ Popup {
                         color: saveSubmitBtn.down ? "#1D4ED8" : (saveSubmitBtn.hovered ? "#2563EB" : "#3B82F6")
                     }
 
+                    // 【核心】提取输入框内容，并触发 4 参信号
                     onClicked: {
                         popup.titleText = editNameField.text.trim()
                         popup.contentText = editPathField.text.trim()
-                        popup.saved(popup.titleText, popup.contentText)
+                        popup.iconColor = popup.getValidColor(editColorField.text.trim(), popup.iconColor)
+                        popup.characterText = editCharField.text.trim().toUpperCase()
+
+                        popup.saved(popup.titleText, popup.contentText, popup.iconColor, popup.characterText)
                         popup.isEditing = false
                         popup.close()
                     }
                 }
             }
 
-            // 模式 2：应用卡片预览状态的操作按钮 [删除] [编辑] [启动]
+            // 查看状态按钮：[删除] [编辑] [立即运行]
             RowLayout {
                 Layout.fillWidth: true
                 spacing: 10
@@ -331,6 +444,8 @@ Popup {
                     onClicked: {
                         editNameField.text = popup.titleText
                         editPathField.text = popup.contentText
+                        editColorField.text = popup.iconColor
+                        editCharField.text = popup.characterText
                         popup.isEditing = true
                     }
                 }
@@ -363,7 +478,7 @@ Popup {
                 }
             }
 
-            // 模式 3：普通信息/通知弹窗状态（非可编辑） [确定]
+            // 只读通知状态按钮：[我知道了]
             RowLayout {
                 Layout.fillWidth: true
                 visible: !popup.editable

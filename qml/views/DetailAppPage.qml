@@ -1,3 +1,6 @@
+// qmllint disable unqualified
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -10,9 +13,9 @@ Page {
     property string randomColor: generateRandomColor()
 
     function generateRandomColor() {
-        var letters = '0123456789ABCDEF'
-        var color = '#'
-        for (var i = 0; i < 6; i++) {
+        const letters = '0123456789ABCDEF'
+        let color = '#'
+        for (let i = 0; i < 6; i++) {
             color += letters[Math.floor(Math.random() * 16)]
         }
         return color
@@ -20,7 +23,7 @@ Page {
 
     // 颜色合法性校验辅助函数，防止非法字符串导致 QML 报警
     function getValidColor(colorStr, fallback) {
-        var c = Qt.color(colorStr)
+        const c = Qt.color(colorStr)
         return (c.a > 0 || colorStr.toLowerCase() === "#000000" || colorStr.toLowerCase() === "black") ? colorStr : fallback
     }
 
@@ -271,6 +274,7 @@ Page {
 
                             // 随机颜色按钮
                             Button {
+                                id: randomBtn
                                 implicitHeight: 38
                                 implicitWidth: 70
                                 text: "随机"
@@ -280,8 +284,8 @@ Page {
                                 }
                                 background: Rectangle {
                                     radius: 6
-                                    border.color: parent.down ? "#9CA3AF" : "#D1D5DB"
-                                    color: parent.down ? "#E5E7EB" : (parent.hovered ? "#F3F4F6" : "#FFFFFF")
+                                    border.color: randomBtn.down ? "#9CA3AF" : "#D1D5DB"
+                                    color: randomBtn.down ? "#E5E7EB" : (randomBtn.hovered ? "#F3F4F6" : "#FFFFFF")
                                 }
                             }
                         }
@@ -312,30 +316,23 @@ Page {
                 }
 
                 onClicked: {
-                    // 1. 先缓存 Window 和 StackView 引用
-                    // 因为 Immediate 立即出栈会瞬间解绑当前组件，直接访问可能导致对象失效
-                    var targetWin = detailPage.Window.window
-                    var stack = detailPage.StackView.view
+                    const targetWin = detailPage.Window.window
+                    const stack = detailPage.StackView.view
 
-                    // 2. 写入数据模型
                     if (typeof moduleModel !== "undefined" && moduleModel.addModule) {
                         moduleModel.addModule(nameInput.text, pathInput.text, colorInput.text, characterInput.text)
                     } else {
                         console.warn("moduleModel 未注册或未找到 addModule 方法")
                     }
 
-                    // 3. 瞬间出栈至根页面（上一个页面）
-                    // null 表示直接回退到最底层页面，StackView.Immediate 强制不使用任何过渡动画
                     if (stack) {
                         stack.pop(null, StackView.Immediate)
                     }
 
-                    // 4. 关闭/隐藏当前窗口
                     if (targetWin) {
-                        targetWin.close() // 或 targetWin.hide()
+                        targetWin.close()
                     }
                 }
-
             }
 
             Item { height: 16 } // 底部留白

@@ -7,7 +7,6 @@
 
 ModuleModel::ModuleModel(QObject *parent) : QAbstractListModel(parent)
 {
-    // 在构造时可以先不加载，或者加载默认数据
 }
 
 int ModuleModel::rowCount(const QModelIndex &parent) const
@@ -24,7 +23,6 @@ QVariant ModuleModel::data(const QModelIndex &index, int role) const
 
     const ModuleItem &item = m_items[index.row()];
 
-    // 根据 QML 请求的 role，返回对应的数据
     switch (role)
     {
     case NameRole:
@@ -42,7 +40,6 @@ QVariant ModuleModel::data(const QModelIndex &index, int role) const
 QHash<int, QByteArray> ModuleModel::roleNames() const
 {
     QHash<int, QByteArray> roles;
-    // 将 C++ 的枚举映射为 QML 中可以直接使用的字符串变量名
     roles[NameRole] = "name";
     roles[PathRole] = "path";
     roles[ColorRole] = "color";
@@ -50,14 +47,9 @@ QHash<int, QByteArray> ModuleModel::roleNames() const
     return roles;
 }
 
-// 模拟读取信息（比如从文件或 MQTT 读取）并生成数据
 void ModuleModel::loadDataFromSource()
 {
-    // 定义配置文件路径。请根据实际存放位置修改。
-    // 如果配置文件与可执行文件在同一目录，可使用：
-    // QString configPath = QCoreApplication::applicationDirPath() + "/config.json";
     QString configPath = "config.json";
-
     QFile file(configPath);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
     {
@@ -70,15 +62,9 @@ void ModuleModel::loadDataFromSource()
 
     QJsonParseError parseError;
     QJsonDocument jsonDoc = QJsonDocument::fromJson(jsonData, &parseError);
-    if (parseError.error != QJsonParseError::NoError)
+    if (parseError.error != QJsonParseError::NoError || !jsonDoc.isObject())
     {
-        qWarning() << "JSON 解析失败，格式错误:" << parseError.errorString();
-        return;
-    }
-
-    if (!jsonDoc.isObject())
-    {
-        qWarning() << "JSON 根节点格式不正确，期望为 Object";
+        qWarning() << "JSON 解析失败或格式不正确";
         return;
     }
 
@@ -91,15 +77,12 @@ void ModuleModel::loadDataFromSource()
 
     QJsonArray modulesArray = rootObj["modules"].toArray();
 
-    // 开始更新模型数据
     beginResetModel();
     m_items.clear();
 
     for (int i = 0; i < modulesArray.size(); ++i)
     {
         QJsonObject itemObj = modulesArray[i].toObject();
-
-        // 提取字段。toString 的参数为读取失败或字段不存在时的默认后备值
         QString name = itemObj.value("name").toString("未命名");
         QString path = itemObj.value("path").toString("");
         QString color = itemObj.value("color").toString("#FFFFFF");
@@ -107,63 +90,100 @@ void ModuleModel::loadDataFromSource()
 
         m_items.append({name, path, color, character});
     }
-
     endResetModel();
 
     qDebug() << "本地配置加载完成，共读取" << m_items.count() << "个模块";
 }
 
-void ModuleModel::addModule(const QString &name, const QString &path, const QString &color, const QString &character)
+// 统一保存内存中的 m_items 到 config.json
+bool ModuleModel::saveToFile()
 {
-    QString configPath = "config.json"; // 必须与 loadDataFromSource 的路径保持完全一致
+    QString configPath = "config.json";
     QFile file(configPath);
-
     QJsonObject rootObj;
-    QJsonArray modulesArray;
 
-    // 1. 如果文件存在，先读取原有数据
+    // 若原文件存在，读取保留可能存在的其他配置项（如 version）
     if (file.open(QIODevice::ReadOnly | QIODevice::Text))
     {
-        QByteArray jsonData = file.readAll();
-        file.close();
-
-        QJsonDocument doc = QJsonDocument::fromJson(jsonData);
+        QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
         if (doc.isObject())
         {
             rootObj = doc.object();
-            if (rootObj.contains("modules") && rootObj["modules"].isArray())
-            {
-                modulesArray = rootObj["modules"].toArray();
-            }
         }
+        file.close();
     }
 
-    // 2. 构造新的模块对象并追加到数组
-    QJsonObject newModule;
-    newModule["name"] = name;
-    newModule["path"] = path;
-    newModule["color"] = color;
-    newModule["character"] = character;
+    QJsonArray modulesArray;
+    for (const auto &item : m_items)
+    {
+        QJsonObject obj;
+        obj["name"] = item.name;
+        obj["path"] = item.path;
+        obj["color"] = item.color;
+        obj["character"] = item.character;
+        modulesArray.append(obj);
+    }
 
-    modulesArray.append(newModule);
-
-    // 3. 更新根节点数据
     rootObj["version"] = "1.1";
     rootObj["modules"] = modulesArray;
 
-    // 4. 将更新后的数据写回 JSON 文件
-    if (file.open(QIODevice::WriteOnly | QIODevice::Text))
-    {
-        QJsonDocument newDoc(rootObj);
-        file.write(newDoc.toJson());
-        file.close();
-        qDebug() << "数据追加成功，已保存至:" << configPath;
-
-        // 5. 重新加载数据，自动触发界面刷新
-        loadDataFromSource();
-    }
-    else
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
     {
         qWarning() << "无法打开文件以写入:" << configPath;
+        return false;
     }
+
+    file.write(QJsonDocument(rootObj).toJson());
+    file.close();
+    return true;
+}
+
+// 【核心修改接口】更新指定项并通知 QML
+bool ModuleModel::updateModule(int index, const QString &name, const QString &path, const QString &color, const QString &character)
+{
+    if (index < 0 || index >= m_items.count())
+    {
+        qWarning() << "[ModuleModel] 修改失败：索引越界" << index;
+        return false;
+    }
+
+    // 1. 更新内存数据
+    m_items[index] = {name, path, color, character};
+
+    // 2. 发射 dataChanged 信号，精确刷新 4 个 Role
+    QModelIndex modelIdx = createIndex(index, 0);
+    emit dataChanged(modelIdx, modelIdx, {NameRole, PathRole, ColorRole, CharacterRole});
+
+    // 3. 持久化到 JSON 文件
+    bool ok = saveToFile();
+    if (ok)
+    {
+        qDebug() << "[ModuleModel] 模块更新成功并写入文件，索引:" << index;
+    }
+    return ok;
+}
+
+// 【新增删除接口】
+bool ModuleModel::removeModule(int index)
+{
+    if (index < 0 || index >= m_items.count())
+    {
+        qWarning() << "[ModuleModel] 删除失败：索引越界" << index;
+        return false;
+    }
+
+    beginRemoveRows(QModelIndex(), index, index);
+    m_items.removeAt(index);
+    endRemoveRows();
+
+    return saveToFile();
+}
+
+void ModuleModel::addModule(const QString &name, const QString &path, const QString &color, const QString &character)
+{
+    beginInsertRows(QModelIndex(), m_items.count(), m_items.count());
+    m_items.append({name, path, color, character});
+    endInsertRows();
+
+    saveToFile();
 }

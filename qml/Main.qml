@@ -1,14 +1,18 @@
+// qmllint disable unqualified
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Window
 import "components"
 import "views"
 
 ApplicationWindow {
     id: root
-    width: 620
+    width: 570
     height: 520
-    minimumWidth: 480
+    minimumWidth: 435
     minimumHeight: 400
     visible: true
     title: "快捷控制台"
@@ -17,19 +21,6 @@ ApplicationWindow {
     // 状态标识与选中项索引记录
     property bool mqttConnected: false
     property int currentAppIndex: -1
-
-    // 软件启动时静默检测并自动连接 MQTT
-    Component.onCompleted: {
-        if (typeof mqttHandler !== "undefined") {
-            var host = mqttHandler.host ? mqttHandler.host.trim() : ""
-            if (host !== "") {
-                console.log("[启动自连] 检测到配置缓存，开始自动连接 Broker:", host)
-                mqttHandler.saveAndConnect(host, 1883, mqttHandler.user || "", mqttHandler.password || "")
-            } else {
-                console.log("[启动自连] 本地未配置 MQTT 地址，跳过自动连接")
-            }
-        }
-    }
 
     header: ToolBar {
         implicitHeight: 52
@@ -174,52 +165,63 @@ ApplicationWindow {
                 model: typeof moduleModel !== "undefined" ? moduleModel : 0
 
                 delegate: ActionCard {
-                    title: model.name || "未命名"
-                    iconColor: model.color || "#6B7280"
-                    iconSource: model.path ? ("image://appicon/" + model.path) : ""
+                    id: cardDelegate
+
+                    // 显式声明注入的属性，消除 unqualified 报错
+                    required property int index
+                    required property var model
+
+                    title: cardDelegate.model.name || "未命名"
+                    iconColor: cardDelegate.model.color || "#6B7280"
+                    iconSource: cardDelegate.model.path ? ("image://appicon/" + cardDelegate.model.path) : ""
 
                     onClicked: {
-                        root.currentAppIndex = index
-                        // 打开卡片详情：开启可编辑及操作模式
+                        root.currentAppIndex = cardDelegate.index
                         myDetailPopup.editable = true
-                        myDetailPopup.titleText = model.name || "未命名应用"
-                        myDetailPopup.contentText = model.path || ""
-                        myDetailPopup.iconColor = model.color || "#3B82F6"
-                        myDetailPopup.characterText = model.character || (model.name ? model.name.charAt(0).toUpperCase() : "A")
+                        myDetailPopup.titleText = cardDelegate.model.name || "未命名应用"
+                        myDetailPopup.contentText = cardDelegate.model.path || ""
+                        myDetailPopup.iconColor = cardDelegate.model.color || "#3B82F6"
+                        myDetailPopup.characterText = cardDelegate.model.character || (cardDelegate.model.name ? cardDelegate.model.name.charAt(0).toUpperCase() : "A")
                         myDetailPopup.open()
                     }
                 }
             }
 
             // 添加按钮卡片
+            // 添加按钮卡片
             ActionCard {
                 title: "添加更多"
                 iconColor: "#6B7280"
-                onClicked: selectApp.show()
+                onClicked: {
+                    if (!selectAppLoader.active) {
+                        selectAppLoader.active = true
+                    } else {
+                        const win = selectAppLoader.item as Window
+                        if (win) {
+                            win.show()
+                            win.raise()
+                            win.requestActivate()
+                        }
+                    }
+                }
             }
         }
     }
 
-    // 详情与编辑弹窗（处理卡片操作与外部通知）
+    // 详情与编辑弹窗
     DetailPopup {
         id: myDetailPopup
         anchors.centerIn: parent
 
-        // 1. 保存修改回调
-        onSaved: function(newName, newPath) {
-            console.log("[主界面] 保存修改:", root.currentAppIndex, newName, newPath)
-            if (typeof moduleModel !== "undefined") {
-                if (moduleModel.updateModule) {
-                    moduleModel.updateModule(root.currentAppIndex, newName, newPath)
-                } else if (moduleModel.editModule) {
-                    moduleModel.editModule(root.currentAppIndex, newName, newPath)
-                } else {
-                    console.warn("[主界面] moduleModel 未提供 updateModule 或 editModule 接口")
-                }
+        onSaved: function(newName, newPath, newColor, newChar) {
+            console.log("[主界面] 保存修改:", root.currentAppIndex, newName, newPath, newColor, newChar)
+            if (typeof moduleModel !== "undefined" && moduleModel.updateModule) {
+                moduleModel.updateModule(root.currentAppIndex, newName, newPath, newColor, newChar)
+            } else {
+                console.warn("[主界面] moduleModel 未就绪或未找到 updateModule")
             }
         }
 
-        // 2. 删除项回调
         onDeleted: {
             console.log("[主界面] 删除模块, 索引:", root.currentAppIndex)
             if (typeof moduleModel !== "undefined") {
@@ -233,27 +235,35 @@ ApplicationWindow {
             }
         }
 
-        // 3. 运行程序回调
         onLaunched: {
             console.log("[主界面] 启动目标程序:", myDetailPopup.contentText)
             if (typeof moduleModel !== "undefined" && moduleModel.launchApp) {
                 moduleModel.launchApp(myDetailPopup.contentText)
             } else {
-                // 回退机制：使用 Qt 原生外部调用接口执行
                 Qt.openUrlExternally("file:///" + myDetailPopup.contentText)
             }
         }
     }
 
-    SelectAppPage {
-        id: selectApp
+    Loader {
+        id: selectAppLoader
+        active: false
+        source: "views/SelectAppPage.qml"
+
+        // 首次激活加载完成后立即展示窗口
+        onLoaded: {
+            const win = item as Window
+            if (win) {
+                win.show()
+            }
+        }
     }
 
     SettingWindow {
         id: settingWin
     }
 
-    // 监听配置包导出反馈（纯通知模式）
+    // 监听配置包导出反馈
     Connections {
         target: typeof shareManager !== "undefined" ? shareManager : null
         function onExportFinished(success, message) {
@@ -281,7 +291,6 @@ ApplicationWindow {
 
         function onMessageReceived(topic, value) {
             console.log("[主界面] 收到 NFC 指令 => 主题:", topic, "| 指令:", value)
-            // 收到指令：切换为通知模式弹出
             myDetailPopup.editable = false
             myDetailPopup.characterText = ""
             myDetailPopup.titleText = "收到 NFC 指令"

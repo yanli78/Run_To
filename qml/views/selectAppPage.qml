@@ -1,3 +1,6 @@
+// qmllint disable unqualified
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Dialogs
@@ -13,11 +16,7 @@ Window {
     visible: false
     color: "#F5F6F8"
 
-    // 控制右上角按钮：只保留关闭按钮，禁用/移除最大化与最小化控件
     flags: Qt.Dialog | Qt.WindowTitleHint | Qt.WindowCloseButtonHint | Qt.CustomizeWindowHint
-
-    // 若需要【完全移除右上角所有按钮】（包括关闭按钮），请替换为下面这行：
-    // flags: Qt.Window | Qt.WindowTitleHint | Qt.CustomizeWindowHint
 
     onClosing: stackView.pop(null)
 
@@ -33,11 +32,11 @@ Window {
 
             function loadApps() {
                 if (typeof softwareScanner !== "undefined" && softwareScanner.scanDefaultApps) {
-                    rawAppList = softwareScanner.scanDefaultApps() || []
+                    selectPage.rawAppList = softwareScanner.scanDefaultApps() || []
                 }
             }
 
-            Component.onCompleted: loadApps()
+            Component.onCompleted: selectPage.loadApps()
 
             Connections {
                 target: appWindow
@@ -48,13 +47,14 @@ Window {
                 }
             }
 
+            // 过滤后的应用列表
             readonly property var filteredApps: {
-                if (!rawAppList || rawAppList.length === 0) return []
-                if (!searchText.trim()) return rawAppList
-                var kw = searchText.trim().toLowerCase()
-                return rawAppList.filter(function(item) {
-                    var nameMatch = item.appName && item.appName.toLowerCase().indexOf(kw) !== -1
-                    var pathMatch = item.appPath && item.appPath.toLowerCase().indexOf(kw) !== -1
+                if (!selectPage.rawAppList || selectPage.rawAppList.length === 0) return []
+                if (!selectPage.searchText.trim()) return selectPage.rawAppList
+                const kw = selectPage.searchText.trim().toLowerCase()
+                return selectPage.rawAppList.filter(function(item) {
+                    const nameMatch = item.appName && item.appName.toLowerCase().indexOf(kw) !== -1
+                    const pathMatch = item.appPath && item.appPath.toLowerCase().indexOf(kw) !== -1
                     return nameMatch || pathMatch
                 })
             }
@@ -93,17 +93,17 @@ Window {
                 title: "选择可执行文件"
                 nameFilters: ["可执行程序/快捷方式 (*.exe *.lnk)", "所有文件 (*)"]
                 onAccepted: {
-                    var rawUrl = selectedFile.toString()
-                    var cleanPath = decodeURIComponent(rawUrl.replace(/^file:\/{2,3}/, ""))
+                    const rawUrl = fileDialog.selectedFile.toString()
+                    let cleanPath = decodeURIComponent(rawUrl.replace(/^file:\/{2,3}/, ""))
 
                     if (cleanPath.length >= 3 && cleanPath[0] === '/' && cleanPath[2] === ':') {
                         cleanPath = cleanPath.substring(1)
                     }
 
-                    var normalizedPath = cleanPath.replace(/\\/g, "/")
-                    var fullName = normalizedPath.substring(normalizedPath.lastIndexOf("/") + 1)
-                    var dotIndex = fullName.lastIndexOf(".")
-                    var name = (dotIndex > 0) ? fullName.substring(0, dotIndex) : fullName
+                    const normalizedPath = cleanPath.replace(/\\/g, "/")
+                    const fullName = normalizedPath.substring(normalizedPath.lastIndexOf("/") + 1)
+                    const dotIndex = fullName.lastIndexOf(".")
+                    const name = (dotIndex > 0) ? fullName.substring(0, dotIndex) : fullName
 
                     stackView.push("DetailAppPage.qml", {
                                        "appName": name,
@@ -235,16 +235,13 @@ Window {
                         boundsBehavior: Flickable.StopAtBounds
                         model: selectPage.filteredApps
 
-                        // 自定义现代细条滚动条
+                        reuseItems: true
+                        cacheBuffer: 200
+
                         ScrollBar.vertical: ScrollBar {
                             id: vbar
                             policy: ScrollBar.AsNeeded
                             width: 6
-                            anchors.top: parent.top
-                            anchors.bottom: parent.bottom
-                            anchors.right: parent.right
-                            anchors.topMargin: 2
-                            anchors.bottomMargin: 2
 
                             contentItem: Rectangle {
                                 implicitWidth: 6
@@ -255,7 +252,9 @@ Window {
 
                         delegate: ItemDelegate {
                             id: appDelegate
-                            // 动态避让滚动条，滚动条显示时不遮挡右侧箭头
+
+                            required property var modelData
+
                             width: appListView.width - (vbar.visible ? (vbar.width + 4) : 0)
                             implicitHeight: 56
                             padding: 8
@@ -278,12 +277,13 @@ Window {
 
                                     Image {
                                         anchors.centerIn: parent
-                                        source: "image://appicon/" + modelData.appPath
+                                        source: "image://appicon/" + appDelegate.modelData.appPath
                                         sourceSize: Qt.size(28, 28)
                                         width: 28
                                         height: 28
                                         fillMode: Image.PreserveAspectFit
                                         smooth: true
+                                        asynchronous: true
                                     }
                                 }
 
@@ -292,7 +292,7 @@ Window {
                                     spacing: 3
 
                                     Label {
-                                        text: modelData.appName || "未知程序"
+                                        text: appDelegate.modelData.appName || "未知程序"
                                         font.pixelSize: 13
                                         font.bold: true
                                         color: "#111827"
@@ -301,7 +301,7 @@ Window {
                                     }
 
                                     Label {
-                                        text: modelData.appPath || ""
+                                        text: appDelegate.modelData.appPath || ""
                                         font.pixelSize: 11
                                         color: "#6B7280"
                                         Layout.fillWidth: true
@@ -320,8 +320,8 @@ Window {
 
                             onClicked: {
                                 stackView.push("DetailAppPage.qml", {
-                                                   "appName": modelData.appName,
-                                                   "appPath": modelData.appPath
+                                                   "appName": appDelegate.modelData.appName,
+                                                   "appPath": appDelegate.modelData.appPath
                                                })
                             }
                         }

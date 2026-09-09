@@ -82,5 +82,8 @@ int main(int argc, char *argv[])
 
     engine.loadFromModule("Run_To", "Main");
 
+    // 5. 触发 MQTT 自连（此时 QML Connections 已完成绑定，可正常接收信号）
+    mqttHandler.tryAutoConnect();
+
     return app.exec();
 }
